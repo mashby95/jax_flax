@@ -29,13 +29,13 @@ from ml_collections import config_flags
 import tensorflow as tf
 import ray
 from ray import tune
-from ray.tune.schedulers import AsyncHyperBandScheduler
+
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string('workdir', './', 'Directory to store model data.')
 config_flags.DEFINE_config_file(
     'config',
-    '/home/mhoa/flax/examples/mnist/configs/ray_tune.py',
+    '/home/mhoa/flax/examples/mnist/configs/default.py',
     'File path to the training hyperparameter configuration.',
     lock_config=True)
 
@@ -58,19 +58,8 @@ def main(argv):
   platform.work_unit().create_artifact(platform.ArtifactType.DIRECTORY,FLAGS.workdir, 'workdir')
   
   ray.init()
-  sched = AsyncHyperBandScheduler()
-
   analysis = tune.run(
-    train.train_and_evaluate,
-    metric = "mean_accuracy",
-    mode = "max",
-    name = "exp",
-    scheduler = sched,
-    stop={
-        "mean_accuracy": 0.98,
-        "training_iteration": 5
-        },
-    config = FLAGS.config
+    train.train_and_evaluate(FLAGS.config, FLAGS.workdir)
     )
   print("Best config is:", analysis.best_config)  
 

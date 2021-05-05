@@ -146,7 +146,7 @@ def get_datasets():
   return train_ds, test_ds
 
 
-def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
+def train_and_evaluate(config):
   """Execute model training and evaluation loop.
 
   Args:
@@ -159,20 +159,20 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
   train_ds, test_ds = get_datasets()
   rng = jax.random.PRNGKey(0)
 
-  summary_writer = tensorboard.SummaryWriter(workdir)
-  summary_writer.hparams(dict(config))
+  summary_writer = tensorboard.SummaryWriter('./')
+  summary_writer.hparams(config)
 
   rng, init_rng = jax.random.split(rng)
   params = get_initial_params(init_rng)
   optimizer = create_optimizer(
-      params, config.learning_rate, config.momentum)
+      params, config["learning_rate"], config["momentum"])
 
-  for epoch in range(1, config.num_epochs + 1):
+  for epoch in range(1, config["num_epochs"] + 1):
     rng, input_rng = jax.random.split(rng)
     optimizer, train_metrics = train_epoch(
-        optimizer, train_ds, config.batch_size, epoch, input_rng)
+        optimizer, train_ds, config["batch_size"], epoch, input_rng)
     loss, accuracy = eval_model(optimizer.target, test_ds)
-    tune.report(mean_acc = accuracy, mean_loss = loss)
+    tune.report(mean_accuracy = accuracy)
 
     logging.info('eval epoch: %d, loss: %.4f, accuracy: %.2f',
                  epoch, loss, accuracy * 100)
