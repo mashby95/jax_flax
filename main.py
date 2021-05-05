@@ -57,18 +57,22 @@ def main(argv):
       f'host_id: {jax.host_id()}, host_count: {jax.host_count()}')
   platform.work_unit().create_artifact(platform.ArtifactType.DIRECTORY,FLAGS.workdir, 'workdir')
   
-  ray.init()
-  sched = AsyncHyperBandScheduler()
+  ray.init(num_cpus=2)
+  #sched = AsyncHyperBandScheduler()
 
   analysis = tune.run(
     train.train_and_evaluate,
     metric = "mean_accuracy",
     mode = "max",
-    name = "exp",
-    scheduler = sched,
+    name = "exp2",
+    # scheduler = sched,
     stop={
         "mean_accuracy": 0.98,
         "training_iteration": 5
+        },
+    resources_per_trial={
+            "cpu": 2,
+            
         },
     config = FLAGS.config
     )
