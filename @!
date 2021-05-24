@@ -66,16 +66,18 @@ class CNN(nn.Module):
     #  Decoder:
     x = nn.Dense(features = 256)(encoded)
     x = nn.relu(x)
+    print(x.shape)
     x = nn.Dense(features = 50176)(x)
     x = nn.relu(x)
-    x = x.reshape((x.shape[0], 28, 28, 64)) #hardcoded
+    print(x.shape)
+    breakpoint()
+    x = x.reshape((1, 28, 28, 64)) #hardcoded 
     x = nn.Conv(features=64, kernel_size=(3, 3))(x)
     x = nn.relu(x)
     x = nn.Conv(features=32, kernel_size=(3, 3))(x) 
     x = nn.relu(x)
     x = nn.Conv(features=1, kernel_size=(3, 3))(x)
     decoded = nn.sigmoid(x) #(1,28,28,1)
-    return decoded
 
 
 def get_initial_params(key):
@@ -99,8 +101,6 @@ def cross_entropy_loss(logits, labels):
   return -jnp.mean(jnp.sum(onehot(labels) * logits, axis=-1))
 
 def autoencoder_loss(logits, image):
-   # if type(logits) or type(image) == NoneType:
-    #    breakpoint()
     return jnp.mean((logits - image)**2)
 
 def compute_metrics(logits, labels):

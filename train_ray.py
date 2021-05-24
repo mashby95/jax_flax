@@ -32,50 +32,23 @@ import numpy as np
 import tensorflow_datasets as tfds
 from ray import tune
 
-class encoder(nn.Module):
-
-    @nn.compact
-    def __call__(self, x):
-        x = nn.Conv(features=32, kernel_size=(3, 3))(x)
-        x = nn.relu(x)
-        x = nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2))
-        x = nn.Conv(features=64, kernel_size=(3, 3))(x)
-        x = nn.relu(x)
-        x = nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2))
-        return x
-       
 class CNN(nn.Module):
   """A simple CNN model."""
 
   @nn.compact
   def __call__(self, x):
-    # Encoder:
-    x = nn.Conv(features=32, kernel_size=(3, 3))(x) #(1, 28, 28, 32) 
-    x = nn.relu(x) 
-    x = nn.Conv(features=64, kernel_size=(3, 3))(x) #(1, 28, 28, 64)
+    x = nn.Conv(features=32, kernel_size=(3, 3))(x)
     x = nn.relu(x)
-    x = nn.Conv(features=64, kernel_size=(3, 3))(x) #(1, 28, 28, 64)
-    x = nn.relu(x)
-    x = x.reshape((x.shape[0], -1))  # flatten (1, 50176)
-    x = nn.Dense(features = 256)(x) #(1, 256)
-    x = nn.relu(x)
-    x = nn.Dense(features = 10)(x) #(1, 10)
-    encoded = nn.relu(x)
-    
-
-    #  Decoder:
-    x = nn.Dense(features = 256)(encoded)
-    x = nn.relu(x)
-    x = nn.Dense(features = 50176)(x)
-    x = nn.relu(x)
-    x = x.reshape((x.shape[0], 28, 28, 64)) #hardcoded
+    x = nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2))
     x = nn.Conv(features=64, kernel_size=(3, 3))(x)
     x = nn.relu(x)
-    x = nn.Conv(features=32, kernel_size=(3, 3))(x) 
+    x = nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2))
+    x = x.reshape((x.shape[0], -1))  # flatten
+    x = nn.Dense(features=256)(x)
     x = nn.relu(x)
-    x = nn.Conv(features=1, kernel_size=(3, 3))(x)
-    decoded = nn.sigmoid(x) #(1,28,28,1)
-    return decoded
+    x = nn.Dense(features=10)(x)
+    x = nn.log_softmax(x)
+    return x
 
 
 def get_initial_params(key):
@@ -98,17 +71,13 @@ def onehot(labels, num_classes=10):
 def cross_entropy_loss(logits, labels):
   return -jnp.mean(jnp.sum(onehot(labels) * logits, axis=-1))
 
-def autoencoder_loss(logits, image):
-   # if type(logits) or type(image) == NoneType:
-    #    breakpoint()
-    return jnp.mean((logits - image)**2)
 
 def compute_metrics(logits, labels):
-  loss = autoencoder_loss(logits, labels)
-  #accuracy = jnp.mean(jnp.argmax(logits, -1) == labels)
+  loss = cross_entropy_loss(logits, labels)
+  accuracy = jnp.mean(jnp.argmax(logits, -1) == labels)
   metrics = {
       'loss': loss,
-     # 'accuracy': accuracy,
+      'accuracy': accuracy,
   }
   return metrics
 
@@ -118,19 +87,19 @@ def train_step(optimizer, batch):
   """Train for a single step."""
   def loss_fn(params):
     logits = CNN().apply({'params': params}, batch['image'])
-    loss = autoencoder_loss(logits, batch["image"] )
+    loss = cross_entropy_loss(logits, batch['label'])
     return loss, logits
   grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
   (_, logits), grad = grad_fn(optimizer.target)
   optimizer = optimizer.apply_gradient(grad)
-  metrics = compute_metrics(logits, batch['image'])
+  metrics = compute_metrics(logits, batch['label'])
   return optimizer, metrics
 
 
 @jax.jit
 def eval_step(params, batch):
   logits = CNN().apply({'params': params}, batch['image'])
-  return compute_metrics(logits, batch['image'])
+  return compute_metrics(logits, batch['label'])
 
 
 def train_epoch(optimizer, train_ds, batch_size, epoch, rng):
@@ -154,7 +123,7 @@ def train_epoch(optimizer, train_ds, batch_size, epoch, rng):
       for k in batch_metrics_np[0]}
 
   logging.info('train epoch: %d, loss: %.4f, accuracy: %.2f', epoch,
-               epoch_metrics_np['loss'])#, epoch_metrics_np['accuracy'] * 100)
+               epoch_metrics_np['loss'], epoch_metrics_np['accuracy'] * 100)
 
   return optimizer, epoch_metrics_np
 
@@ -163,7 +132,7 @@ def eval_model(params, test_ds):
   metrics = eval_step(params, test_ds)
   metrics = jax.device_get(metrics)
   summary = jax.tree_map(lambda x: x.item(), metrics)
-  return summary['loss']
+  return summary['loss'], summary['accuracy']
 
 
 def get_datasets():
@@ -202,16 +171,16 @@ def train_and_evaluate(config):
     rng, input_rng = jax.random.split(rng)
     optimizer, train_metrics = train_epoch(
         optimizer, train_ds, config["batch_size"], epoch, input_rng)
-    loss = eval_model(optimizer.target, test_ds)
-    tune.report(mean_loss = loss)
+    loss, accuracy = eval_model(optimizer.target, test_ds)
+    tune.report(mean_accuracy = accuracy)
 
     logging.info('eval epoch: %d, loss: %.4f, accuracy: %.2f',
-                 epoch, loss)#, accuracy * 100)
+                 epoch, loss, accuracy * 100)
 
     summary_writer.scalar('train_loss', train_metrics['loss'], epoch)
-    #summary_writer.scalar('train_accuracy', train_metrics['accuracy'], epoch)
+    summary_writer.scalar('train_accuracy', train_metrics['accuracy'], epoch)
     summary_writer.scalar('eval_loss', loss, epoch)
-    #summary_writer.scalar('eval_accuracy', accuracy, epoch)
+    summary_writer.scalar('eval_accuracy', accuracy, epoch)
 
   summary_writer.flush()
   return optimizer

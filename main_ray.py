@@ -62,12 +62,12 @@ def main(argv):
 
   analysis = tune.run(
     train.train_and_evaluate,
-    metric = "mean_loss",
-    mode = "min",
+    metric = "mean_accuracy",
+    mode = "max",
     name = "exp2",
     # scheduler = sched,
     stop={
-        #"mean_accuracy": 0.98,
+        "mean_accuracy": 0.98,
         "training_iteration": 5
         },
     resources_per_trial={

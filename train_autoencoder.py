@@ -49,21 +49,30 @@ class CNN(nn.Module):
 
   @nn.compact
   def __call__(self, x):
-    #Encoder
-    x = nn.Conv(features=32, kernel_size=(3, 3))(x) #(1, 28, 28, 32)
+    # Encoder:
+    x = nn.Conv(features=32, kernel_size=(3, 3))(x) #(1, 28, 28, 32) 
     x = nn.relu(x) 
-    x = nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2)) #(1, 14, 14, 32)
-    x = nn.Conv(features=64, kernel_size=(3, 3))(x) #(1, 14, 14, 64)
+    x = nn.Conv(features=64, kernel_size=(3, 3))(x) #(1, 28, 28, 64)
     x = nn.relu(x)
-    encoded = nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2)) #(1, 7, 7, 64)
+    x = nn.Conv(features=64, kernel_size=(3, 3))(x) #(1, 28, 28, 64)
+    x = nn.relu(x)
+    x = x.reshape((x.shape[0], -1))  # flatten (1, 50176)
+    x = nn.Dense(features = 256)(x) #(1, 256)
+    x = nn.relu(x)
+    x = nn.Dense(features = 10)(x) #(1, 10)
+    encoded = nn.relu(x)
     
-    #Decoder:
-    x = nn.Conv(features=64, kernel_size=(3, 3))(encoded)
+
+    #  Decoder:
+    x = nn.Dense(features = 256)(encoded)
     x = nn.relu(x)
-    x = nn.ConvTranspose(64, kernel_size=(3, 3), strides=(2,2))(x) #(1,14,14,64)
+    x = nn.Dense(features = 50176)(x)
+    x = nn.relu(x)
+    x = x.reshape((x.shape[0], 28, 28, 64)) #hardcoded
+    x = nn.Conv(features=64, kernel_size=(3, 3))(x)
+    x = nn.relu(x)
     x = nn.Conv(features=32, kernel_size=(3, 3))(x) 
     x = nn.relu(x)
-    x = nn.ConvTranspose(32, kernel_size=(3, 3), strides = (2,2))(x) #(1,28,28,32)
     x = nn.Conv(features=1, kernel_size=(3, 3))(x)
     decoded = nn.sigmoid(x) #(1,28,28,1)
     return decoded
@@ -90,6 +99,8 @@ def cross_entropy_loss(logits, labels):
   return -jnp.mean(jnp.sum(onehot(labels) * logits, axis=-1))
 
 def autoencoder_loss(logits, image):
+   # if type(logits) or type(image) == NoneType:
+    #    breakpoint()
     return jnp.mean((logits - image)**2)
 
 def compute_metrics(logits, labels):
