@@ -71,6 +71,11 @@ def onehot(labels, num_classes=10):
 def cross_entropy_loss(logits, labels):
   return -jnp.mean(jnp.sum(onehot(labels) * logits, axis=-1))
 
+def autoencoder_loss(logits, image):
+    # if type(logits) or type(image) == NoneType:
+    #    breakpoint()
+    return jnp.mean((logits - image)**2)
+
 
 def compute_metrics(logits, labels):
   loss = cross_entropy_loss(logits, labels)

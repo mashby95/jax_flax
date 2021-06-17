@@ -21,14 +21,11 @@ than can be easily tested and imported in Colab.
 from absl import app
 from absl import flags
 from absl import logging
-
 from clu import platform
 import train
 import jax
 from ml_collections import config_flags
 import tensorflow as tf
-import ray
-from ray import tune
 
 FLAGS = flags.FLAGS
 
@@ -57,11 +54,7 @@ def main(argv):
       f'host_id: {jax.host_id()}, host_count: {jax.host_count()}')
   platform.work_unit().create_artifact(platform.ArtifactType.DIRECTORY,FLAGS.workdir, 'workdir')
   
-  ray.init()
-  analysis = tune.run(
-    train.train_and_evaluate(FLAGS.config, FLAGS.workdir)
-    )
-  print("Best config is:", analysis.best_config)  
+  train.train_and_evaluate(FLAGS.config)
 
 
 if __name__ == '__main__':

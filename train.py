@@ -30,7 +30,9 @@ import jax.numpy as jnp
 import ml_collections
 import numpy as np
 import tensorflow_datasets as tfds
-from ray import tune
+import pickle
+from flax import serialization
+
 
 class encoder(nn.Module):
 
@@ -129,7 +131,7 @@ def train_step(optimizer, batch):
 
 @jax.jit
 def eval_step(params, batch):
-  logits = CNN().apply({'params': params}, batch['image'])
+  logits = CNN().apply({'params': params}, batch['image']) #(10000, 28, 28, 1)
   return compute_metrics(logits, batch['image'])
 
 
@@ -203,7 +205,6 @@ def train_and_evaluate(config):
     optimizer, train_metrics = train_epoch(
         optimizer, train_ds, config["batch_size"], epoch, input_rng)
     loss = eval_model(optimizer.target, test_ds)
-    tune.report(mean_loss = loss)
 
     logging.info('eval epoch: %d, loss: %.4f, accuracy: %.2f',
                  epoch, loss)#, accuracy * 100)
@@ -214,4 +215,10 @@ def train_and_evaluate(config):
     #summary_writer.scalar('eval_accuracy', accuracy, epoch)
 
   summary_writer.flush()
+  
+  opt_dict = serialization.to_state_dict(optimizer)
+  with open('opt_test.pkl', 'wb') as f:
+      pickle.dump(opt_dict, f)
+
+
   return optimizer
