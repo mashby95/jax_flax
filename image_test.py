@@ -42,6 +42,14 @@ def eval_image(opt_pkl,image):
     loss = autoencoder_loss(logits, image) 
     print(loss)
 
+def eval_image_sow(opt_pkl,image):
+    optimizer = load_optimizer(opt_pkl)
+    model = models.AutoEncoder_sow()
+    #logits = models.AutoEncoder_sow().apply({'params': optimizer.target}, image)
+    logits, mod_vars = model.apply({'params': optimizer.target}, image, mutable=['intermediates'])
+    loss = autoencoder_loss(logits, image)
+    print(loss)
+    print(mod_vars["intermediates"]["latent"])
 
 image = load_image()
-eval_image('opt_test.pkl', image)
+eval_image_sow('opt_test.pkl', image)
