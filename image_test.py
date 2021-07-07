@@ -31,16 +31,56 @@ def load_image():
     print(f'Image dimensions = {image.shape}')
     return image #(1,28,28,1)
 
+def load_batch(batch_pkl):
+    with open(batch_pkl, 'rb') as f:
+        test_ds = pickle.load(f)
+    return test_ds
+
+
+def test_batch(): #test_ds has keys "image" and "label"
+    ds_builder = tfds.builder('mnist')
+    ds_builder.download_and_prepare()
+    test_ds = tfds.as_numpy(ds_builder.as_dataset(split='test[:1%]', batch_size=-1, shuffle_files = True))
+    test_ds['image'] = jnp.float32(test_ds['image']) / 255.
+    with open('test_batch.pkl', 'wb') as f:
+        pickle.dump(test_ds, f)
+
+
 def autoencoder_loss(logits, image):
    # if type(logits) or type(image) == NoneType:
     #    breakpoint()
     return jnp.mean((logits - image)**2)
+
+def batch_loss(logits,images):
+    loss_arr = (logits-images)**2
+    loss = [jnp.mean(i) for i in loss_arr]
+    return loss
 
 def eval_image(opt_pkl,image):
     optimizer = load_optimizer(opt_pkl)
     logits = models.AutoEncoder().apply({'params': optimizer.target}, image)
     loss = autoencoder_loss(logits, image) 
     print(loss)
+
+def eval_image_batch(opt_pkl,test_batch):
+    eval_results = {'image': [],'label': [], 'logits': [], 'loss': [], 'latent': []}
+    optimizer = load_optimizer(opt_pkl)
+    model = models.AutoEncoder_sow()
+    test_images = test_batch["image"]
+    test_labels = test_batch["label"]
+
+    #logits = models.AutoEncoder().apply({'params': optimizer.target}, test_images)
+    logits, mod_vars = model.apply({'params': optimizer.target}, test_images, mutable=['intermediates'])
+    loss = batch_loss(logits, test_images)
+    latent = mod_vars["intermediates"]["latent"]
+
+    eval_results['image'].append(test_images)
+    eval_results['logits'].append(logits)
+    eval_results['loss'].append(loss)
+    eval_results['latent'].append(latent)
+    eval_results['label'].append(test_labels)
+    #print(loss)
+    return eval_results
 
 def eval_image_sow(opt_pkl,image):
     eval_results = {'image': [], 'logits': [], 'loss': [], 'latent': []}
@@ -58,5 +98,10 @@ def eval_image_sow(opt_pkl,image):
     eval_results['latent'].append(mod_vars["intermediates"]["latent"])
     return eval_results
 
-image = load_image()
-eval_image_sow('opt_test.pkl', image)
+'''test_ds = load_batch()
+eval_image_sow('opt_test.pkl', test_ds)'''
+
+test_batch = load_batch('test_batch.pkl')
+results = eval_image_batch('opt_test.pkl', test_batch)
+for key,value in results.items():
+    print(key, len(value))
